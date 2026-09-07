@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Travel Planner serverless backend
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 10
+    MemorySize: 256
+    Environment:
+      Variables:
+        FAVORITES_TABLE: !Ref FavoritesTable
+        UPLOAD_BUCKET: !Ref UploadBucket
+  HttpApi:
+    CorsConfiguration:
+      AllowOrigins: [http://localhost:5173]
+      AllowHeaders: [Content-Type, Authorization]
+      AllowMethods: [GET, POST, DELETE, OPTIONS]
+Resources:
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Auth:
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: '$request.header.Authorization'
+            JwtConfiguration:
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}'
+              audience: [!Ref UserPoolClient]
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows: [ALLOW_USER_PASSWORD_AUTH, ALLOW_REFRESH_TOKEN_AUTH, ALLOW_USER_SRP_AUTH]
+      PreventUserExistenceErrors: ENABLED
+  FavoritesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - {AttributeName: userId, AttributeType: S}
+        - {AttributeName: destinationId, AttributeType: N}
+      KeySchema:
+        - {AttributeName: userId, KeyType: HASH}
+        - {AttributeName: destinationId, KeyType: RANGE}
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [PUT]
+            AllowedOrigins: [http://localhost:5173]
+            MaxAge: 300
+  DestinationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: destinations.handler
+      Events:
+        Search:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /destinations, Method: GET}
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties: {EntryPoints: [src/destinations.ts], Minify: true, Target: es2022, Sourcemap: true}
+  FavoritesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: favorites.handler
+      Policies:
+        - DynamoDBCrudPolicy: {TableName: !Ref FavoritesTable}
+      Events:
+        List:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /favorites, Method: GET, Auth: {Authorizer: CognitoJwt}}
+        Add:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /favorites, Method: POST, Auth: {Authorizer: CognitoJwt}}
+        Delete:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: '/favorites/{destinationId}', Method: DELETE, Auth: {Authorizer: CognitoJwt}}
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties: {EntryPoints: [src/favorites.ts], Minify: true, Target: es2022, Sourcemap: true}
+  UploadsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: uploads.handler
+      Policies:
+        - S3CrudPolicy: {BucketName: !Ref UploadBucket}
+      Events:
+        CreateUpload:
+          Type: HttpApi
+          Properties: {ApiId: !Ref Api, Path: /uploads, Method: POST, Auth: {Authorizer: CognitoJwt}}
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties: {EntryPoints: [src/uploads.ts], Minify: true, Target: es2022, Sourcemap: true}
+Outputs:
+  ApiUrl:
+    Value: !Sub 'https://${Api}.execute-api.${AWS::Region}.amazonaws.com'
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+  UploadBucketName:
+    Value: !Ref UploadBucket
