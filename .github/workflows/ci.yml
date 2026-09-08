@@ -32,5 +32,6 @@ jobs:
           }
       - uses: aws-actions/setup-sam@v2
       - run: npm ci
+      - run: npm install --global esbuild
       - run: sam validate --region us-east-1
       - run: sam build
