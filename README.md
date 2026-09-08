@@ -1,6 +1,6 @@
 # Travel Planner
 
-React + TypeScript + Vite frontend and AWS SAM serverless backend.
+React + TypeScript + Vite frontend and AWS SAM serverless backend
 
 ## Stack
 React, TypeScript, React Router, Cognito, API Gateway HTTP API, Lambda, DynamoDB, S3, AWS SDK v3, Open-Meteo.
