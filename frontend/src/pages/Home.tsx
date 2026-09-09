@@ -40,7 +40,7 @@ export default function Home() {
   return (
     <section>
       <div className="hero">
-        <span>React + AWS Serverless</span>
+        <span>Travel</span>
         <h1>Discover your next destination.</h1>
         <p>
           Search a city, view current weather, save favorites and upload travel photos.
