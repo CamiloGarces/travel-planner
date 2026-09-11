@@ -27,7 +27,7 @@ export default function Favorites() {
 
   return (
     <section>
-      <h1>My favorites</h1>
+      <h1>Favorites</h1>
       {msg && <p className="message">{msg}</p>}
 
       <div className="grid">
